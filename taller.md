@@ -915,13 +915,19 @@ CREATE PROCEDURE ObtenerDireccionCliente(
     IN id_cliente INT
 )
 BEGIN
-    SELECT u.direccion, u.ciudad, u.pais
-    FROM clientes AS c
-    JOIN ubicacion AS u ON c.ubicacion_id = u.id
-    WHERE c.id = id_cliente;
+    DECLARE MESSAGE_TEXT VARCHAR(100);
+    IF EXISTS (
+        SELECT 1 FROM clientes WHERE id = id_cliente
+    )THEN
+        SELECT u.direccion, u.ciudad, u.pais
+        FROM clientes AS c
+        JOIN ubicacion AS u ON c.ubicacion_id = u.id
+        WHERE c.id = id_cliente;
+    ELSE
+        SELECT 'Cliente no encontrado.' AS mensaje;
+    END IF;
 END;
 //
-
 DELIMITER ;
 
 
@@ -938,14 +944,23 @@ CREATE PROCEDURE RegistrarPedido(
 )
 BEGIN
     DECLARE nuevo_pedido_id INT;
+    DECLARE MESSAGE_TEXT VARCHAR(100);
+    IF NOT EXISTS(SELECT 1 FROM clientes WHERE id = id_cliente) THEN
+        SET MESSAGE_TEXT = 'Cliente no existe.';
+    ELSEIF NOT EXISTS (SELECT 1 FROM productos WHERE id = id_producto) THEN
+         SET MESSAGE_TEXT = 'Producto no existe.';
+    ELSE
 
-    INSERT INTO pedidos (cliente_id, fecha, total, empleado_id)
-    VALUES (id_cliente, CURDATE(), cantidad * precio_unitario, id_empleado);
+        INSERT INTO pedidos (cliente_id, fecha, total, empleado_id)
+        VALUES (id_cliente, CURDATE(), cantidad * precio_unitario, id_empleado);
 
-    SET nuevo_pedido_id = LAST_INSERT_ID();
+        SET nuevo_pedido_id = LAST_INSERT_ID();
 
-    INSERT INTO detallespedido (pedido_id, producto_id, cantidad, precio)
-    VALUES (nuevo_pedido_id, id_producto, cantidad, precio_unitario);
+        INSERT INTO detallespedido (pedido_id, producto_id, cantidad, precio)
+        VALUES (nuevo_pedido_id, id_producto, cantidad, precio_unitario);
+
+        SELECT'alistado con exito' AS Mensaje;;
+    END IF;
 END;
 //
 
@@ -959,9 +974,13 @@ CREATE PROCEDURE TotalVentasCliente(
     IN id_cliente INT
 )
 BEGIN
-    SELECT SUM(total) AS total_ventas
-    FROM pedidos
-    WHERE cliente_id = id_cliente;
+    IF EXISTS (SELECT 1 FROM pedidos WHERE cliente_id = id_cliente) THEN
+        SELECT SUM(total) AS total_ventas
+        FROM pedidos
+        WHERE cliente_id = id_cliente;
+    ELSE
+        SELECT 'El cliente no tiene pedidos.' AS mensaje;
+    END IF;
 END;
 //
 
@@ -975,10 +994,14 @@ CREATE PROCEDURE EmpleadosPorPuesto(
     IN nombre_puesto VARCHAR(50)
 )
 BEGIN
-    SELECT de.nombre
-    FROM datosempleados AS de
-    JOIN puestos AS p ON de.puesto_id = p.id
-    WHERE p.puesto = nombre_puesto;
+    IF EXISTS (SELECT 1 FROM puestos WHERE puesto = nombre_puesto) THEN
+        SELECT de.nombre
+        FROM datosempleados AS de
+        JOIN puestos AS p ON de.puesto_id = p.id
+        WHERE p.puesto = nombre_puesto;
+    ELSE
+        SELECT 'puesto no encontrado' AS Mensaje;
+    END IF;
 END;
 //
 
@@ -993,9 +1016,15 @@ CREATE PROCEDURE ActualizarSalarioPorPuesto(
     IN nuevo_salario DECIMAL(10,2)
 )
 BEGIN
-    UPDATE puestos
-    SET salario = nuevo_salario
-    WHERE puesto = nombre_puesto;
+    IF nuevo_salario <= 0 THEN
+        SELECT 'EL SALARIO NO PUEDE SER NEGATIVO CONSIDERE' AS Mensaje;
+    ELSEIF EXISTS (SELECT 1 FROM puestos WHERE puesto = nombre_puesto) THEN
+        UPDATE puestos
+        SET salario = nuevo_salario
+        WHERE puesto = nombre_puesto;
+    ELSE
+        SELECT 'puesto no encontrado' AS Mensaje;
+    END IF;
 END;
 //
 
@@ -1010,9 +1039,13 @@ CREATE PROCEDURE PedidosEntreFechas(
     IN fecha_fin DATE
 )
 BEGIN
-    SELECT *
-    FROM pedidos
-    WHERE fecha BETWEEN fecha_inicio AND fecha_fin;
+    IF fecha_inicio > fecha_fin THEN
+        SELECT 'La fecah de inicio no puede ser mayor que la fecha final.';
+    ELSE
+        SELECT *
+        FROM pedidos
+        WHERE fecha BETWEEN fecha_inicio AND fecha_fin;
+    END IF;
 END;
 //
 
@@ -1027,10 +1060,21 @@ CREATE PROCEDURE AplicarDescuentoCategoria(
     IN descuento DECIMAL(5,2)
 )
 BEGIN
-    UPDATE productos AS p
-    JOIN tiposproductos AS tp ON p.tipo_id = tp.id
-    SET p.precio = p.precio * (1 - descuento / 100)
-    WHERE tp.tipo_nombre = nombre_categoria;
+    IF descuento <= 0 OR descuento >= 100 THEN
+        SELECT 'el descuento debe estar entre 1 y 99.';
+    ELSEIF EXISTS (
+        SELECT 1 FROM tiposproductos WHERE tipo_nombre = nombre_categoria;
+    ) THEN
+        UPDATE productos AS p
+        JOIN tiposproductos AS tp ON p.tipo_id = tp.id
+        SET p.precio = CASE
+            WHEN descuento <= 25 THEN p.precio * (1 - descuento /100)
+            ELSE p.precio * 0.70
+        END
+        WHERE tp.tipo_nombre = nombre_ categoria;
+    ELSE 
+     SELECT 'CATEGORIA NO ENCONTRADA' AS Mensaje;
+     END IF;
 END;
 //
 
@@ -1069,5 +1113,4 @@ BEGIN
 END;
 //
 
-DELIMITER ;#   t a l l e - s u b c o n s u l t a s - p r o c e s o s - a l m a c e n a d o s  
- 
+DELIMITER ;
